@@ -70,12 +70,16 @@ class Network:
 
         ### TODO: Return the loaded inference plugin ###
         self.exec_network = self.plugin.load_network(self.network, device)
+        # Get the layers
+        self.input_blob = next(iter(self.network.inputs))
+        self.output_blob = next(iter(self.network.outputs))
         ### Note: You may need to update the function parameters. ###
         return
 
     def get_input_shape(self):
         ### TODO: Return the shape of the input layer ###
-        return self.network.inputs[self.input_blob].shape
+        input_shape = self.network.inputs[self.input_blob].shape
+        return input_shape
 
     def exec_net(self, image):
         ### TODO: Start an asynchronous request ###
@@ -95,5 +99,6 @@ class Network:
 
     def get_output(self):
         ### TODO: Extract and return the output results
+        output_shape = self.exec_network.requests[0].outputs[self.output_blob]
         ### Note: You may need to update the function parameters. ###
-        return self.exec_network.requests[0].outputs[self.output_blob]
+        return output_shape
