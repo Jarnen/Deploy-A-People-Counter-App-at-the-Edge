@@ -54,6 +54,7 @@ class Network:
         self.plugin = IECore()
         if cpu_extension and "CPU" in device:
             self.plugin.add_extension(cpu_extension, "CPU")
+
         log.info("Loading network files:\n\t{}\n\t{}".format(model_xml_file, model_bin_file))
         self.network = IENetwork(model=model_xml_file, weights=model_bin_file)
         
