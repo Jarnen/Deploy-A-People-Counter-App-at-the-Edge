@@ -26,12 +26,15 @@ import time
 import socket
 import json
 import cv2
+from random import randint # for test
 
 import logging as log
 import paho.mqtt.client as mqtt
 
 from argparse import ArgumentParser
 from inference import Network
+
+import numpy as np
 
 # MQTT server environment variables
 HOSTNAME = socket.gethostname()
@@ -73,22 +76,71 @@ def connect_mqtt():
     client =  mqtt.Client(client_id="", clean_session=True, userdata=None, protocol=mqtt.MQTTv311, transport="tcp")
     client.connect(MQTT_HOST, MQTT_PORT, MQTT_KEEPALIVE_INTERVAL, bind_address="")
     return client
+
 ##Start of my own func
-def get_stats(frame, results, args, width, height):
-     '''
+# initialize the list of class labels MobileNet SSD was trained to
+# detect, then generate a set of bounding box colors for each class
+CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
+	"bottle", "bus", "car", "cat", "chair", "cow", "diningtable",
+	"dog", "horse", "motorbike", "person", "pottedplant", "sheep",
+	"sofa", "train", "tvmonitor"]
+COLORS = np.random.uniform(0, 255, size=(len(CLASSES), 3))
+
+def draw_bbox(frame, results, args, width, height):
+    class_lbls = []
+    #Draw bound box onto the objects
+    for obj in results[0][0]:
+        conf = obj[2]
+        if conf >= 0.5:
+            xmin = int(obj[3] * width)
+            ymin = int(obj[4] * height)
+            xmax = int(obj[5] * width)
+            ymax = int(obj[6] * height)
+            class_id = int(obj[1])
+            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), args.prob_threshold , 1)
+            class_label = CLASSES[class_id]
+            class_lbls.append(class_label)
+
+    #Prepare for FFmpeg
+    classes = cv2.resize(results[0].transpose((1,2,0)), (width,height), interpolation=cv2.INTER_NEAREST)
+    unique_classes = np.unique(classes)
+    out_mask = classes * (255/20)
+    out_mask = np.dstack((out_mask, out_mask, out_mask))
+    out_mask = np.uint8(out_mask)
+
+    return out_mask, unique_classes, class_lbls #frame, unique_classes #class_label #, class_id
+
+def draw_boxes(frame, result, args, width, height):
+    '''
     Draw bounding boxes onto the frame.
     '''
-    for box in results[0][0]:
+    for box in result[0][0]: # Output shape is 1x1x100x7
         conf = box[2]
         if conf >= 0.5:
             xmin = int(box[3] * width)
             ymin = int(box[4] * height)
             xmax = int(box[5] * width)
             ymax = int(box[6] * height)
-            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), args.pt , 1)
+            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 0, 255), 1)
     return frame
 
+def draw_masks(result, width, height):
+    '''
+    Draw semantic mask classes onto the frame.
+    '''
+    # Create a mask with color by class
+    classes = cv2.resize(result[0].transpose((1,2,0)), (width,height), interpolation=cv2.INTER_NEAREST)
+    unique_classes = np.unique(classes)
+    out_mask = classes * (255/20)
+    
+    # Stack the mask so FFmpeg understands it
+    out_mask = np.dstack((out_mask, out_mask, out_mask))
+    out_mask = np.uint8(out_mask)
+
+    return out_mask, unique_classes
+
 ##End of my own func
+
 def infer_on_stream(args, client):
     """
     Initialize the inference network, stream video to network,
@@ -100,12 +152,16 @@ def infer_on_stream(args, client):
     """
     # Initialise the class
     infer_network = Network()
+
+    mqtt_client = client
+    #mqtt_client.loop_start()
+
     # Set Probability threshold for detections
     prob_threshold = args.prob_threshold
 
     ### TODO: Load the model through `infer_network` ###
     log.info("Loading the model through Inference Engine...")
-    infer_network.load_model(args.model, args.input, args.cpu_extension)
+    infer_network.load_model(args.model, args.device, args.cpu_extension)
     net_input_shape = infer_network.get_input_shape()
 
     ### TODO: Handle the input stream ###
@@ -113,6 +169,13 @@ def infer_on_stream(args, client):
     cap.open(args.input)
     width = int(cap.get(3))
     height = int(cap.get(4))
+    
+    #set arr for tracking objects
+    ts = [0,0,False] #[time_first, time_last, got_first]
+    total_count = 0
+    person_found = []
+
+    #out = cv2.VideoWriter('out.mp4', 0x00000021, 30, (width,height))
 
     ### TODO: Loop until stream is over ###
     while cap.isOpened():
@@ -121,41 +184,75 @@ def infer_on_stream(args, client):
         retval, frame = cap.read()
         if not retval:
             break
-        key_pressed = cv2.wait(60) #wait for 60 ms
+        key_pressed = cv2.waitKey(60) #wait for 60 ms
 
         ### TODO: Pre-process the image as needed ###
-        pp_frame = cv2.resize(frame, (net_input_shape[3], net_input_shape[2]) 
-        pp_frame = pp_frame.transpose((2,0,1)) #transpose layout from HWC to CHW
-        pp_frame = pp_frame.reshape(1, *pp_frame.shape) 
+        pr_frame = cv2.resize(frame, (net_input_shape[3], net_input_shape[2]))
+        pr_frame = pr_frame.transpose((2,0,1)) #transpose layout from HWC to CHW
+        pr_frame = pr_frame.reshape(1, *pr_frame.shape)
 
         ### TODO: Start asynchronous inference for specified request ###
-        infer_network.exec_net(pp_frame)
+        infer_network.exec_net(pr_frame)
 
         ### TODO: Wait for the result ###
         if infer_network.wait() == 0:
 
+
             ### TODO: Get the results of the inference request ###
-            results = infer_network.get_output()
+            result = infer_network.get_output()
 
             ### TODO: Extract any desired stats from the results ###
-            output_frame = get_stats(frame, results, args, width, height)
-            person = randint(50,70) # for test
-            total_count = randint(50,70) # for test
-            duration = datetime.datetime() # for test
+            #output_frame, classes, class_lbl = draw_bbox(frame, results, args, width, height)
 
+            frame = draw_boxes(frame, result, args, width, height)
+            # Write out the frame
+            #out.write(frame)
+            #out_frame, classes = draw_masks(result, width, height)
+           
             ### TODO: Calculate and send relevant information on ###
             ### current_count, total_count and duration to the MQTT server ###
             ### Topic "person": keys of "count" and "total" ###
             ### Topic "person/duration": key of "duration" ###
-            client.publish("person", json.dumps({"persom": person}))
-            client.publish("person/duration", json.dumps({"duration": duration}))
+            '''
+            for idx in class_lbl:
+                if idx == "person":
+                    total_count += total_count
+                    if ts[2] == False:
+                        ts[0] = time.time()
+                        ts[2] = True
+                else:
+                    if ts[2] == True:
+                        ts[1] = time.time()
+                        ts[2] = False
+                person_found.append([ts[0], ts[1]])
+
+           # for list in person_found:
+            #    duration = list[1] - list[0]
+            '''          
+            duration = time.time()
+            count = int(5)
+            total_count = int(6)
+
+            mqtt_client.publish("person", json.dumps({"total": total_count}))
+            mqtt_client.publish("person", json.dumps({"count": count}))
+            mqtt_client.publish("person/duration", json.dumps({"duration": duration}))
 
         ### TODO: Send the frame to the FFMPEG server ###
-        sys.stdout.buffer.write(output_frame)
-        sys.stdout.flush()
-
+            
+            #ff_frame = np.dstack((output_frame, output_frame, output_frame))
+            #ff_frame = np.uint8(ff_frame)
+            #ff_frame = classes * (255/20)
+            sys.stdout.buffer.write(frame)
+            sys.stdout.flush()
+            
         ### TODO: Write an output image if `single_image_mode` ###
-
+    
+    # Release the capture and destroy any OpenCV windows
+    cap.release()
+    cv2.destroyAllWindows()
+    ### TODO: Disconnect from MQTT
+    mqtt_client.loop_stop()
+    mqtt_client.disconnect()
 
 def main():
     """
