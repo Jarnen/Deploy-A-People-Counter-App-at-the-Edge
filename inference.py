@@ -43,7 +43,7 @@ class Network:
         self.exec_network = None
         self.inference_req = None
 
-    def load_model(self, model, device, cpu_extension=None):
+    def load_model(self, model, device, cpu_extension):
         ### TODO: Load the model ###
         model_xml_file = model
         model_bin_file = os.path.splitext(model_xml_file)[0] + ".bin"
@@ -52,13 +52,15 @@ class Network:
         # Initialize the plugin
         log.info("Creating Inference Engine...")
         self.plugin = IECore()
+
         if cpu_extension and "CPU" in device:
-            self.plugin.add_extension(cpu_extension, "CPU")
+            self.plugin.add_extension(cpu_extension, device)
 
         log.info("Loading network files:\n\t{}\n\t{}".format(model_xml_file, model_bin_file))
         self.network = IENetwork(model=model_xml_file, weights=model_bin_file)
         
         ### TODO: Add any necessary extensions ###
+        '''
         if "CPU" in device:
             supported_layers = self.plugin.query_network(self.network, "CPU")
             not_supported_layers = [l for l in self.network.layers.keys() if l not in supported_layers]
@@ -68,7 +70,7 @@ class Network:
                 log.error("Please specify cpu extensions library path in sample's command line parameters using -l "
                       "or --cpu_extension command line argument")
             sys.exit(1)
-
+        '''
         ### TODO: Return the loaded inference plugin ###
         self.exec_network = self.plugin.load_network(self.network, device)
         # Get the layers
