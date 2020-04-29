@@ -85,7 +85,7 @@ CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
 	"dog", "horse", "motorbike", "person", "pottedplant", "sheep",
 	"sofa", "train", "tvmonitor"]
 COLORS = np.random.uniform(0, 255, size=(len(CLASSES), 3))
-
+'''
 def draw_bbox(frame, results, args, width, height):
     class_lbls = []
     #Draw bound box onto the objects
@@ -109,7 +109,7 @@ def draw_bbox(frame, results, args, width, height):
     out_mask = np.uint8(out_mask)
 
     return out_mask, unique_classes, class_lbls #frame, unique_classes #class_label #, class_id
-
+'''
 def draw_boxes(frame, result, args, width, height):
     '''
     Draw bounding boxes onto the frame.
@@ -123,22 +123,6 @@ def draw_boxes(frame, result, args, width, height):
             ymax = int(box[6] * height)
             cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 0, 255), 1)
     return frame
-
-def draw_masks(result, width, height):
-    '''
-    Draw semantic mask classes onto the frame.
-    '''
-    # Create a mask with color by class
-    classes = cv2.resize(result[0].transpose((1,2,0)), (width,height), interpolation=cv2.INTER_NEAREST)
-    unique_classes = np.unique(classes)
-    out_mask = classes * (255/20)
-    
-    # Stack the mask so FFmpeg understands it
-    out_mask = np.dstack((out_mask, out_mask, out_mask))
-    out_mask = np.uint8(out_mask)
-
-    return out_mask, unique_classes
-
 ##End of my own func
 
 def infer_on_stream(args, client):
@@ -150,11 +134,11 @@ def infer_on_stream(args, client):
     :param client: MQTT client
     :return: None
     """
+    #mqttclient = client
+    client.loop_start()
+
     # Initialise the class
     infer_network = Network()
-
-    mqtt_client = client
-    #mqtt_client.loop_start()
 
     # Set Probability threshold for detections
     prob_threshold = args.prob_threshold
@@ -175,8 +159,6 @@ def infer_on_stream(args, client):
     total_count = 0
     person_found = []
 
-    #out = cv2.VideoWriter('out.mp4', 0x00000021, 30, (width,height))
-
     ### TODO: Loop until stream is over ###
     while cap.isOpened():
 
@@ -194,6 +176,7 @@ def infer_on_stream(args, client):
         ### TODO: Start asynchronous inference for specified request ###
         infer_network.exec_net(pr_frame)
 
+        
         ### TODO: Wait for the result ###
         if infer_network.wait() == 0:
 
@@ -228,20 +211,16 @@ def infer_on_stream(args, client):
 
            # for list in person_found:
             #    duration = list[1] - list[0]
-            '''          
+            '''  
             duration = time.time()
-            count = int(5)
-            total_count = int(6)
+            count = int(9)
+            total_count = int(10)
 
-            mqtt_client.publish("person", json.dumps({"total": total_count}))
-            mqtt_client.publish("person", json.dumps({"count": count}))
-            mqtt_client.publish("person/duration", json.dumps({"duration": duration}))
-
+            #client.publish("person", json.dumps({"total":total_count}))
+            client.publish("person", json.dumps({"count":count}, json.dumps({"total":total_count})))
+            client.publish("person/duration", json.dumps({"duration":duration}))
+          
         ### TODO: Send the frame to the FFMPEG server ###
-            
-            #ff_frame = np.dstack((output_frame, output_frame, output_frame))
-            #ff_frame = np.uint8(ff_frame)
-            #ff_frame = classes * (255/20)
             sys.stdout.buffer.write(frame)
             sys.stdout.flush()
             
@@ -251,8 +230,8 @@ def infer_on_stream(args, client):
     cap.release()
     cv2.destroyAllWindows()
     ### TODO: Disconnect from MQTT
-    mqtt_client.loop_stop()
-    mqtt_client.disconnect()
+    client.loop_stop()
+    client.disconnect()
 
 def main():
     """
