@@ -86,15 +86,15 @@ CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
 	"bottle", "bus", "car", "cat", "chair", "cow", "diningtable",
 	"dog", "horse", "motorbike", "person", "pottedplant", "sheep",
 	"sofa", "train", "tvmonitor"]
-
+# extract nimber of persons in current frame and draw boxes around them
 def extract(frame, result, args, width, height):
-    p_counts = 0
+    p_counts = 0 # set p_counts for every frame and recounts
     '''
     Draw bounding boxes onto each frame.
     '''
     for obj in result[0][0]: # Output shape is 1x1x100x7/1x1xNx7
         conf = obj[2]
-        if conf >= 0.5:
+        if conf >= args.prob_threshold:
             xmin = int(obj[3] * width)
             ymin = int(obj[4] * height)
             xmax = int(obj[5] * width)
@@ -102,21 +102,15 @@ def extract(frame, result, args, width, height):
             class_id = int(obj[1])
             cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 0, 255), 1)
             class_label = CLASSES[class_id]
-            object_label = "{}: {:.2f}%".format(class_label, conf * 100)
-            cv2.putText(frame, object_label , (xmin, ymin - 7),
-                                cv2.FONT_HERSHEY_COMPLEX, 0.6, (0, 0, 255), 1)
             if class_label == "person":
                 p_counts += 1
-
     return frame, p_counts
 
 def get_uclasses(result, width, height):
     '''
-    Draw semantic mask classes onto the frame.
+    Get unique classes from the result.
     '''
-    # Create a mask with color by class
-    classes = cv2.resize(result[0].transpose((1,2,0)), (width,height), 
-        interpolation=cv2.INTER_AREA) #cv2.INTER_NEAREST)
+    classes = cv2.resize(result[0].transpose((1,2,0)), (width,height), interpolation=cv2.INTER_NEAREST)
     unique_classes = np.unique(classes)
 
     return unique_classes
@@ -126,6 +120,7 @@ alreadyFound = False # was the person on the picture already there?
 alreadyCounted = False # was the person counted
 appearanceFrom = datetime.now() # reference time in order to wait 1s
 
+# check and count total of persons entering and exiting one at a time
 def handleTotal():
     global total_count
     global appearanceFrom
@@ -137,13 +132,11 @@ def handleTotal():
     if alreadyFound == False:
         alreadyFound = True
         alreadyCounted = False 
-        
         appearanceFrom = checkNow
-    elif timeDif.seconds >= 2 and alreadyCounted == False: #print('Person in frame more than 1s')
+    elif timeDif.seconds >= 3 and alreadyCounted == False: #add person in frame more than 3s')
         total_count = total_count + 1
         alreadyCounted = True
-    return
-
+    return total_count
 ##End of my own func
 
 def infer_on_stream(args, client):
@@ -174,14 +167,11 @@ def infer_on_stream(args, client):
     cap.open(args.input)
     width = int(cap.get(3))
     height = int(cap.get(4))
-    
 
-    #set arr for tracking objects person
-    #ts = [0,0,False] #[time_first, time_last, got_first]
-    #person_found = [] #keeps time of persons found
-   
     duration = 5
     global alreadyFound
+    global total_count
+
     ### TODO: Loop until stream is over ###
     while cap.isOpened():
         
@@ -200,7 +190,6 @@ def infer_on_stream(args, client):
         ### TODO: Start asynchronous inference for specified request ###
         infer_network.exec_net(pr_frame)
 
-       
         ### TODO: Wait for the result ###
         if infer_network.wait() == 0:
 
@@ -209,57 +198,37 @@ def infer_on_stream(args, client):
 
             ### TODO: Extract any desired stats from the results ###
             frame, p_counts = extract(frame, result, args, width, height)
-         
-            unique_classes = get_uclasses(result, width, height)
-
-            if 15 in unique_classes:
-                handleTotal()
-            else:
-                if alreadyFound == True:
-                     print('Person counted')
-                alreadyFound = False
-
-
+        
             ### TODO: Calculate and send relevant information on ###
             ### current_count, total_count and duration to the MQTT server ###
             ### Topic "person": keys of "count" and "total" ###
             ### Topic "person/duration": key of "duration" ###
-            '''
-            if 'person' in label:
-                handleScreenshot(frame)
+           
+            unique_classes = get_uclasses(result, width, height)
+
+            if 15 in unique_classes: # check for the ID (15) of persons 
+                total_count = handleTotal()
             else:
                 if alreadyFound == True:
-                    print('Person left frame')
-                alreadyFound = False
+                    log.info("Person counted already...")
+                    alreadyFound = False
 
-            if class_label == "person":
-                total_count += total_count
-                if ts[2] == False:
-                   ts[0] = time.time()
-                   ts[2] = True
-            else:
-                if ts[2] == True:
-                   ts[1] = time.time()
-                   ts[2] = False
-                person_found.append([ts[0], ts[1]])
-            
-            for list in person_found:
-                duration = list[1] - list[0]
-            '''
             total_message = "The Total: {}".format(total_count)
+            current_message = "Person in Frame: {}".format(p_counts)
              # Draw performance stats
-            #cv2.putText(frame, total_obj, (15, 15), cv2.FONT_HERSHEY_COMPLEX, 0.5, (200, 10, 10), 1)
+            cv2.putText(frame, current_message , (15, 15), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
             cv2.putText(frame, total_message , (15, 30), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
            
-            #client.publish("person", json.dumps({"count":p_counts}))
-            client.publish("person", json.dumps({"count": p_counts}, {"total": total_count}))
-            client.publish("person/duration", json.dumps({"duration":duration}))
-          
+            #client.publish("person", json.dumps({"count": p_counts}))
+            client.publish("person", json.dumps({"count": p_counts}))
+            #client.publish("person/duration", json.dumps({"duration":duration}))
+                      
         ### TODO: Send the frame to the FFMPEG server ###
-        sys.stdout.buffer.write(frame)
-        sys.stdout.flush()
+            sys.stdout.buffer.write(frame)
+            sys.stdout.flush()
             
         ### TODO: Write an output image if `single_image_mode` ###
+        
     
     # Release the capture and destroy any OpenCV windows
     cap.release()
