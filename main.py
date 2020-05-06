@@ -117,8 +117,8 @@ def get_uclasses(result, width, height):
     return unique_classes
 
 total_count = 0
-alreadyFound = False # was the person on the picture already there?
-alreadyCounted = False # was the person counted
+alreadyFound = False # to check if peron is in the frame
+alreadyCounted = False # to check if person was counted
 appearanceFrom = datetime.now() # reference time in order to wait 3s
 
 # check and count total of persons entering and exiting one at a time
@@ -134,7 +134,7 @@ def get_total():
         alreadyFound = True
         alreadyCounted = False 
         appearanceFrom = checkNow
-    elif timeDif.seconds >= 3 and alreadyCounted == False: #add person in frame more than 3s')
+    elif timeDif.seconds >= 3 and alreadyCounted == False: #add person in frame more than 3s'
         total_count = total_count + 1
         alreadyCounted = True
     return total_count, timeDif.seconds
@@ -149,9 +149,6 @@ def infer_on_stream(args, client):
     :param client: MQTT client
     :return: None
     """
-    #mqttclient = client
-    #client.loop_start()
-
     # Initialise the class
     infer_network = Network()
 
@@ -169,14 +166,14 @@ def infer_on_stream(args, client):
     width = int(cap.get(3))
     height = int(cap.get(4))
 
-    
+    ## Define and set global variables
     global alreadyFound
     global total_count
+    duration = 0
 
     ### TODO: Loop until stream is over ###
     while cap.isOpened():
-        duration = 0
-
+       
         ### TODO: Read from the video capture ###
         retval, frame = cap.read()
         if not retval:
@@ -204,18 +201,31 @@ def infer_on_stream(args, client):
             ### current_count, total_count and duration to the MQTT server ###
             ### Topic "person": keys of "count" and "total" ###
             ### Topic "person/duration": key of "duration" ###
-           
-            unique_classes = get_uclasses(result, width, height)
 
-            if 15 in unique_classes: # check for the ID (15) of persons 
+            # get unique class from the frame 
+            # because only one person entering frame and exiting.
+            unique_classes = get_uclasses(result, width, height)
+            
+            # check if the ID (15) of persons is enters frame (present)
+            # and use function get_total to calculate and get total count and duration
+            if 15 in unique_classes: 
                 total_count, duration = get_total()
-                
+            
+            # check if the ID (15) of persons exits the frame (absent)
+            # set alreadyFound to False if person already counted and already found
+            # and publish the person/duration to MQTT Server with duration and total count
+            elif 15 not in unique_classes and alreadyCounted == True and alreadyFound == True:
+                client.publish("person/duration", json.dumps({"duration": duration}))
+                alreadyFound = False
+            
+            # otherwise, set alreadyFound to false
             else:
                 if alreadyFound == True:
                     log.info("Person counted already...")
-                    alreadyFound = False
+                    alreadyFound = False 
+
             
-            # Draw performance stats
+            # Draw performance stats on the frame
             total_message = "The Total Count: {}".format(total_count)
             current_message = "The Current Count: {}".format(p_counts)
             duration_message = "Duration in Frame: {} sec".format(duration)
