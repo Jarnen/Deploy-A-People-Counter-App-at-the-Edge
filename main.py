@@ -27,6 +27,7 @@ import socket
 import json
 import cv2
 from random import randint # for test
+import time
 from datetime import datetime
 
 import logging as log
@@ -118,10 +119,10 @@ def get_uclasses(result, width, height):
 total_count = 0
 alreadyFound = False # was the person on the picture already there?
 alreadyCounted = False # was the person counted
-appearanceFrom = datetime.now() # reference time in order to wait 1s
+appearanceFrom = datetime.now() # reference time in order to wait 3s
 
 # check and count total of persons entering and exiting one at a time
-def handleTotal():
+def get_total():
     global total_count
     global appearanceFrom
     global alreadyFound 
@@ -136,7 +137,7 @@ def handleTotal():
     elif timeDif.seconds >= 3 and alreadyCounted == False: #add person in frame more than 3s')
         total_count = total_count + 1
         alreadyCounted = True
-    return total_count
+    return total_count, timeDif.seconds
 ##End of my own func
 
 def infer_on_stream(args, client):
@@ -149,7 +150,7 @@ def infer_on_stream(args, client):
     :return: None
     """
     #mqttclient = client
-    client.loop_start()
+    #client.loop_start()
 
     # Initialise the class
     infer_network = Network()
@@ -168,13 +169,13 @@ def infer_on_stream(args, client):
     width = int(cap.get(3))
     height = int(cap.get(4))
 
-    duration = 5
+    
     global alreadyFound
     global total_count
 
     ### TODO: Loop until stream is over ###
     while cap.isOpened():
-        
+        duration = 0
 
         ### TODO: Read from the video capture ###
         retval, frame = cap.read()
@@ -207,26 +208,27 @@ def infer_on_stream(args, client):
             unique_classes = get_uclasses(result, width, height)
 
             if 15 in unique_classes: # check for the ID (15) of persons 
-                total_count = handleTotal()
+                total_count, duration = get_total()
+                
             else:
                 if alreadyFound == True:
                     log.info("Person counted already...")
                     alreadyFound = False
-
-            total_message = "The Total: {}".format(total_count)
-            current_message = "Person in Frame: {}".format(p_counts)
-             # Draw performance stats
+            
+            # Draw performance stats
+            total_message = "The Total Count: {}".format(total_count)
+            current_message = "The Current Count: {}".format(p_counts)
+            duration_message = "Duration in Frame: {} sec".format(duration)
             cv2.putText(frame, current_message , (15, 15), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
             cv2.putText(frame, total_message , (15, 30), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
-           
-            #client.publish("person", json.dumps({"count": p_counts}))
-            client.publish("person", json.dumps({"count": p_counts}))
-            #client.publish("person/duration", json.dumps({"duration":duration}))
+            cv2.putText(frame, duration_message , (15, 45), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
+
+            #Publish to MQTT Server
+            client.publish("person", json.dumps({"count": p_counts})) #, {"total": total_count}))
                       
         ### TODO: Send the frame to the FFMPEG server ###
-            sys.stdout.buffer.write(frame)
-            sys.stdout.flush()
-            
+        sys.stdout.buffer.write(frame)
+        sys.stdout.flush()
         ### TODO: Write an output image if `single_image_mode` ###
         
     

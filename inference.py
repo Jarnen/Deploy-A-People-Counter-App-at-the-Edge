@@ -47,31 +47,29 @@ class Network:
         ### TODO: Load the model ###
         model_xml_file = model
         model_bin_file = os.path.splitext(model_xml_file)[0] + ".bin"
- 
-        ### TODO: Check for supported layers ###
+
+        log.info("Loading network files:\n\t{}\n\t{}".format(model_xml_file, model_bin_file))
+        self.network = IENetwork(model=model_xml_file, weights=model_bin_file)
+
         # Initialize the plugin
         log.info("Creating Inference Engine...")
         self.plugin = IECore()
 
-        if cpu_extension and "CPU" in device:
-            self.plugin.add_extension(cpu_extension, device)
+        ### TODO: Check for supported layers ###
+        supported_layers = self.plugin.query_network(self.network, device)
+        not_supported_layers = [l for l in self.network.layers.keys() if l not in supported_layers]
+        if len(not_supported_layers) != 0:
+            log.error("These layers are not supported by the plugin for specified device {}:\n {}".
+                    format(device, ', '.join(not_supported_layers)))
 
-        log.info("Loading network files:\n\t{}\n\t{}".format(model_xml_file, model_bin_file))
-        self.network = IENetwork(model=model_xml_file, weights=model_bin_file)
-        
         ### TODO: Add any necessary extensions ###
-        '''
-        if "CPU" in device:
-            supported_layers = self.plugin.query_network(self.network, "CPU")
-            not_supported_layers = [l for l in self.network.layers.keys() if l not in supported_layers]
-            if len(not_supported_layers) != 0:
-                log.error("These layers are not supported by the plugin for specified device {}:\n {}".
-                format(device, ', '.join(not_supported_layers)))
-                log.error("Please specify cpu extensions library path in sample's command line parameters using -l "
-                      "or --cpu_extension command line argument")
-            sys.exit(1)
-        '''
+        if cpu_extension and "CPU" in device:
+            log.info("Adding extension: \n\t\{}".format(cpu_extension))
+            self.plugin.add_extension(cpu_extension, device)
+        
         ### TODO: Return the loaded inference plugin ###
+        
+        
         self.exec_network = self.plugin.load_network(self.network, device)
         # Get the layers
         self.input_blob = next(iter(self.network.inputs))
