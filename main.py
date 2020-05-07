@@ -215,22 +215,24 @@ def infer_on_stream(args, client):
         pr_frame = pr_frame.reshape(1, *pr_frame.shape)
 
         ### TODO: Start asynchronous inference for specified request ###
+        inf_start = time.time()
         infer_network.exec_net(pr_frame)
 
         ### TODO: Wait for the result ###
         if infer_network.wait() == 0:
+            det_time = time.time() - inf_start
 
             ### TODO: Get the results of the inference request ###
             result = infer_network.get_output()
 
             ### TODO: Extract any desired stats from the results ###
             frame, p_counts = extract(frame, result, args, width, height)
-        
+
             ### TODO: Calculate and send relevant information on ###
             ### current_count, total_count and duration to the MQTT server ###
             ### Topic "person": keys of "count" and "total" ###
             ### Topic "person/duration": key of "duration" ###
-            
+
             # get unique class from the frame 
             # because our scenario is one person entering frame and exiting at a time.
             unique_classes = get_uclasses(result, width, height)
@@ -258,9 +260,11 @@ def infer_on_stream(args, client):
             total_message = "The Total Count: {}".format(total_count)
             current_message = "The Current Count: {}".format(p_counts)
             duration_message = "Duration in Frame: {} sec".format(duration)
-            cv2.putText(frame, current_message , (15, 15), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
-            cv2.putText(frame, total_message , (15, 30), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
-            cv2.putText(frame, duration_message , (15, 45), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
+            inf_time_message = "Inference time: {:.3f}ms".format(det_time * 1000)
+            cv2.putText(frame, inf_time_message, (15, 15),cv2.FONT_HERSHEY_COMPLEX, 0.5, (200, 10, 10), 1)
+            cv2.putText(frame, current_message , (15, 30), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
+            cv2.putText(frame, total_message , (15, 45), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
+            cv2.putText(frame, duration_message , (15, 60), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
 
             #Publish to MQTT Server
             client.publish("person", json.dumps({"count": p_counts}))
