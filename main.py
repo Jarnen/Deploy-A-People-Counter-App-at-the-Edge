@@ -138,6 +138,7 @@ def get_total():
         total_count = total_count + 1
         alreadyCounted = True
     return total_count, timeDif.seconds
+    
 ##End of my own func
 
 def infer_on_stream(args, client):
@@ -155,14 +156,40 @@ def infer_on_stream(args, client):
     # Set Probability threshold for detections
     prob_threshold = args.prob_threshold
 
+
     ### TODO: Load the model through `infer_network` ###
     log.info("Loading the model through Inference Engine...")
     infer_network.load_model(args.model, args.device, args.cpu_extension)
     net_input_shape = infer_network.get_input_shape()
 
     ### TODO: Handle the input stream ###
-    cap = cv2.VideoCapture(args.input)
-    cap.open(args.input)
+    # Set flag for the input image
+    single_image_mode = False
+
+    # Checks for live feed
+    if args.input == 'CAM':
+        input_stream = 0
+
+    # Checks for input image
+    elif args.input.endswith('.jpg') or args.input.endswith('.bmp'):
+        single_image_mode = True
+        input_stream = args.input
+
+    # Checks for video file
+    else:
+        input_stream = args.input
+        assert os.path.isfile(args.input), "Specified input file doesn't exist"
+
+    cap = cv2.VideoCapture(input_stream)
+
+    if input_stream:
+        cap.open(args.input)
+
+    if not cap.isOpened():
+        log.error("ERROR! Unable to open video source")
+
+    #cap = cv2.VideoCapture(args.input)
+    #cap.open(args.input)
     width = int(cap.get(3))
     height = int(cap.get(4))
 
@@ -175,7 +202,9 @@ def infer_on_stream(args, client):
     while cap.isOpened():
        
         ### TODO: Read from the video capture ###
+        # get return value and frame
         retval, frame = cap.read()
+
         if not retval:
             break
         key_pressed = cv2.waitKey(60) #wait for 60 ms
@@ -201,12 +230,12 @@ def infer_on_stream(args, client):
             ### current_count, total_count and duration to the MQTT server ###
             ### Topic "person": keys of "count" and "total" ###
             ### Topic "person/duration": key of "duration" ###
-
+            
             # get unique class from the frame 
-            # because only one person entering frame and exiting.
+            # because our scenario is one person entering frame and exiting at a time.
             unique_classes = get_uclasses(result, width, height)
             
-            # check if the ID (15) of persons is enters frame (present)
+            # check if the ID (15) of persons enters frame (present)
             # and use function get_total to calculate and get total count and duration
             if 15 in unique_classes: 
                 total_count, duration = get_total()
@@ -234,13 +263,16 @@ def infer_on_stream(args, client):
             cv2.putText(frame, duration_message , (15, 45), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
 
             #Publish to MQTT Server
-            client.publish("person", json.dumps({"count": p_counts})) #, {"total": total_count}))
+            client.publish("person", json.dumps({"count": p_counts}))
                       
         ### TODO: Send the frame to the FFMPEG server ###
-        sys.stdout.buffer.write(frame)
-        sys.stdout.flush()
+            sys.stdout.buffer.write(frame)
+            sys.stdout.flush()
+
         ### TODO: Write an output image if `single_image_mode` ###
-        
+        if single_image_mode:
+            cv2.imwrite('output_image.jpg', frame)
+            infer_network.clean()
     
     # Release the capture and destroy any OpenCV windows
     cap.release()
