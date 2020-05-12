@@ -57,19 +57,18 @@ class Network:
 
         ### TODO: Check for supported layers ###
         supported_layers = self.plugin.query_network(self.network, device)
-        not_supported_layers = [l for l in self.network.layers.keys() if l not in supported_layers]
-        if len(not_supported_layers) != 0:
-            log.error("These layers are not supported by the plugin for specified device {}:\n {}".
-                    format(device, ', '.join(not_supported_layers)))
+        if len(supported_layers) == 0:
+            log.error("There are no supported layers for the plugin for the specified device {}: ".
+                    format(device))
+            sys.exit(1)
 
         ### TODO: Add any necessary extensions ###
+        # Using CPU so use CPU extension
         if cpu_extension and "CPU" in device:
             log.info("Adding extension: \n\t\{}".format(cpu_extension))
             self.plugin.add_extension(cpu_extension, device)
         
-        ### TODO: Return the loaded inference plugin ###
-        
-        
+        ### TODO: Return the loaded inference plugin ###s
         self.exec_network = self.plugin.load_network(self.network, device)
         # Get the layers
         self.input_blob = next(iter(self.network.inputs))

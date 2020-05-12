@@ -87,7 +87,8 @@ CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
 	"bottle", "bus", "car", "cat", "chair", "cow", "diningtable",
 	"dog", "horse", "motorbike", "person", "pottedplant", "sheep",
 	"sofa", "train", "tvmonitor"]
-# extract nimber of persons in current frame and draw boxes around them
+
+# extract number of persons in current frame and draw boxes around them
 def extract(frame, result, args, width, height):
     p_counts = 0 # set p_counts for every frame and recounts
     '''
@@ -116,7 +117,7 @@ def get_uclasses(result, width, height):
 
     return unique_classes
 
-total_count = 0
+total_count = 0 # to add total persons
 alreadyFound = False # to check if peron is in the frame
 alreadyCounted = False # to check if person was counted
 appearanceFrom = datetime.now() # reference time in order to wait 3s
@@ -226,6 +227,7 @@ def infer_on_stream(args, client):
             result = infer_network.get_output()
 
             ### TODO: Extract any desired stats from the results ###
+            # get and draw the bounding box for person
             frame, p_counts = extract(frame, result, args, width, height)
 
             ### TODO: Calculate and send relevant information on ###
@@ -253,22 +255,21 @@ def infer_on_stream(args, client):
             else:
                 if alreadyFound == True:
                     log.info("Person counted already...")
-                    alreadyFound = False 
-
+                    alreadyFound = False
             
             # Draw performance stats on the frame
             total_message = "The Total Count: {}".format(total_count)
             current_message = "The Current Count: {}".format(p_counts)
             duration_message = "Duration in Frame: {} sec".format(duration)
             inf_time_message = "Inference time: {:.3f}ms".format(det_time * 1000)
-            cv2.putText(frame, inf_time_message, (15, 15),cv2.FONT_HERSHEY_COMPLEX, 0.5, (200, 10, 10), 1)
+            cv2.putText(frame, inf_time_message, (15, 15),cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
             cv2.putText(frame, current_message , (15, 30), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
             cv2.putText(frame, total_message , (15, 45), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
             cv2.putText(frame, duration_message , (15, 60), cv2.FONT_HERSHEY_COMPLEX, 0.5, (10, 10, 200), 1)
 
             #Publish to MQTT Server
             client.publish("person", json.dumps({"count": p_counts}))
-                      
+
         ### TODO: Send the frame to the FFMPEG server ###
             sys.stdout.buffer.write(frame)
             sys.stdout.flush()
