@@ -82,7 +82,7 @@ def connect_mqtt():
 ##Start of my own func
 # initialize the list of class labels MobileNet SSD was trained to
 # detect
-
+# Reference: Most of this idea are taken from Foundation
 CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
 	"bottle", "bus", "car", "cat", "chair", "cow", "diningtable",
 	"dog", "horse", "motorbike", "person", "pottedplant", "sheep",

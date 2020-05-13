@@ -27,6 +27,7 @@ import sys
 import logging as log
 from openvino.inference_engine import IENetwork, IECore
 
+#Reference: Most of this idea are taken from Foundation
 
 class Network:
     """
