@@ -88,8 +88,8 @@ CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
 	"dog", "horse", "motorbike", "person", "pottedplant", "sheep",
 	"sofa", "train", "tvmonitor"]
 
-# extract number of persons in current frame and draw boxes around them
-def extract(frame, result, args, width, height):
+# count number of persons in current frame and draw boxes around them
+def count_draw(frame, result, args, width, height):
     p_counts = 0 # set p_counts for every frame and recounts
     '''
     Draw bounding boxes onto each frame.
@@ -228,7 +228,7 @@ def infer_on_stream(args, client):
 
             ### TODO: Extract any desired stats from the results ###
             # get and draw the bounding box for person
-            frame, p_counts = extract(frame, result, args, width, height)
+            frame, p_counts = count_draw(frame, result, args, width, height)
 
             ### TODO: Calculate and send relevant information on ###
             ### current_count, total_count and duration to the MQTT server ###
