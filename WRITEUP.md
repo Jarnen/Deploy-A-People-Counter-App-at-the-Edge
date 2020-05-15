@@ -30,18 +30,39 @@ Some of the potential reasons for handling custom layers is when a model is not 
 
 ## Comparing Model Performance
 
-My method(s) to compare models before and after conversion to Intermediate Representations
-were to use the Openvino Deep Learning Workbench
+My method(s) to compare the model performances was by using the Openvino Deep Learning Workbench and my computer Resource Monitor.
 
-Here are the results of the final working model Mobilenet SSD Caffe model which I used.
+From the resource monitor the CPU usage increased from 10% to 30% and CPU minimum frequency increased from 70% to maximum frequency of 99% when executing the application using the model. Thus, the overhead of CPU usage was around 20%. 
 
-The difference between model accuracy pre- and post-conversion was not produced since it is not provided for the sample data I provided.
+To measure the model accuracy, I downloaded coco val2017 dataset and with its annotations and create configuration together with my model on the Deep Learning workbench. Below are the two different metric configuration results;
+      1) Using COCO Precision
+      - The model type is SSD for CPU targeted device and with maximum 20 deections, the accuracy was 0.63%
+      2) Using Mean Average Precision (mAP)
+      - The model type is SSD for CPU targeted device and with overlap threshold of 0.5, the accuracy was 3.61%
+So depending on the type of metric configuration used, the model's accuracy was noticed to increase.
 
-The size of the model was increased by some megabites after conversion since it produced a third file,  .mapping file, apart from the bin and xml file. Otherwise, the original size was reduced if the .mappting file was not included.
+The size of the model was measured using ncdu 1.11. The original size and size after conversion are as per below;
+            1) Before Conversion
+             22.1 MiB - MobileNetSSD_deploy.caffemodel
+             32.0 KiB - MobileNetSSD_deploy.prototxt
+            2) After Conversion 
+             22.1 MiB - MobileNetSSD_deploy.bin
+             68.0 KiB - MobileNetSSD_deploy.xml
+             16.0 KiB - MobileNetSSD_deploy.mapping                                                                                     
+So it was noticed that the overal size of the produced files after conversion was a bit higher then the overal size of the original files by 52 KiB. That is inclding the .mappting file.
 
-And the inference time of the model was reduced after conversion.
+And the inference time of the model was reduced after conversion. Refer below the Model Performance Summary extracted using Deep Learning Workbench.
+            1) Baseline Summary with 1 Batch and 1 Parallel Stream
+            Latency - 34.69 ms
+            Throughput(FPS) - 26.81 
+            2) Standard Inference with 1 Batch and 2 Parallel Stream
+            Lateny - 43.71 ms
+            Throughput(FPS) - 39.0
+When executing the application on my laptop computer, the average inference time was around 30 ms
 
-With respect to the network needs, it will really be reduced since the size of the model is reduced. Thus, deploying at the edge will be achievable and more appropriate than deploying from cloud. However, I believe, it would be still costly when deploying at the edge then from cloud if the end users' app needs more power and hardware for calculation. 
+Deploying at the edge has more advantages compared to deploying on the cloud in terms of network and costs. In cloud computing, devices send the visual data into the cloud for analysis, which then returns appropriate responses to the device for further action. This can lead to latencies in system response time and thus increases the network needs and can provide poor results and increase network needs. 
+
+With respect to costs, deploying at the edge is significantly less compared to deploying at the cloud. Since computer vision is complex and powerful, it can become very expensive to build deploy and maintain. Thus cloud companies charge for inferencing per endpoint.This may be helpful for organizations that can pay on an ‘as needed’ basis; but becomes enormously burdensome for organizations that demand large amounts of real-time processing of videos/footages from online camera 
 
 ## Assess Model Use Cases
 
