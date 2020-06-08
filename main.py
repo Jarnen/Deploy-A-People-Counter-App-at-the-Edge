@@ -122,8 +122,11 @@ had_found = False # to check if peron is in the frame
 had_counted = False # to check if person was counted
 appearanceFrom = datetime.now() # reference time in order to wait 3s
 
-# check and count total of persons entering and exiting one at a time
+
 def get_total():
+    """
+    Get and returns total of persons and time taken in frame
+    """
     global total_count
     global appearanceFrom
     global had_found 
