@@ -192,8 +192,6 @@ def infer_on_stream(args, client):
     if not cap.isOpened():
         log.error("ERROR! Unable to open video source")
 
-    #cap = cv2.VideoCapture(args.input)
-    #cap.open(args.input)
     width = int(cap.get(3))
     height = int(cap.get(4))
 
