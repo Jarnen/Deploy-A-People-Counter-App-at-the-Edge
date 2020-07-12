@@ -74,12 +74,11 @@ def build_argparser():
 
 
 def connect_mqtt():
-    ### TODO: Connect to the MQTT client ###
+    """Connect to the MQTT client"""
     client =  mqtt.Client(client_id="", clean_session=True, userdata=None, protocol=mqtt.MQTTv311, transport="tcp")
     client.connect(MQTT_HOST, MQTT_PORT, MQTT_KEEPALIVE_INTERVAL, bind_address="")
     return client
 
-##Start of my own func
 # initialize the list of class labels MobileNet SSD was trained to
 # detect
 # Reference: Most of this idea are taken from Foundation
@@ -142,8 +141,6 @@ def get_total():
         total_count = total_count + 1
         had_counted = True
     return total_count, timeDif.seconds
-    
-##End of my own func
 
 def infer_on_stream(args, client):
     """
@@ -161,12 +158,12 @@ def infer_on_stream(args, client):
     prob_threshold = args.prob_threshold
 
 
-    ### TODO: Load the model through `infer_network` ###
+    ### Load the model through `infer_network` ###
     log.info("Loading the model through Inference Engine...")
     infer_network.load_model(args.model, args.device, args.cpu_extension)
     net_input_shape = infer_network.get_input_shape()
 
-    ### TODO: Handle the input stream ###
+    ### Handle the input stream ###
     # Set flag for the input image
     single_image_mode = False
 
@@ -200,10 +197,10 @@ def infer_on_stream(args, client):
     global total_count
     duration = 0
 
-    ### TODO: Loop until stream is over ###
+    ### Loop until stream is over ###
     while cap.isOpened():
        
-        ### TODO: Read from the video capture ###
+        ### Read from the video capture ###
         # get return value and frame
         retval, frame = cap.read()
 
@@ -211,27 +208,27 @@ def infer_on_stream(args, client):
             break
         key_pressed = cv2.waitKey(60) #wait for 60 ms
 
-        ### TODO: Pre-process the image as needed ###
+        ### Pre-process the image as needed ###
         pr_frame = cv2.resize(frame, (net_input_shape[3], net_input_shape[2]))
         pr_frame = pr_frame.transpose((2,0,1)) #transpose layout from HWC to CHW
         pr_frame = pr_frame.reshape(1, *pr_frame.shape)
 
-        ### TODO: Start asynchronous inference for specified request ###
+        ### Start asynchronous inference for specified request ###
         inf_start = time.time()
         infer_network.exec_net(pr_frame)
 
-        ### TODO: Wait for the result ###
+        ### Wait for the result ###
         if infer_network.wait() == 0:
             det_time = time.time() - inf_start
 
-            ### TODO: Get the results of the inference request ###
+            ### Get the results of the inference request ###
             result = infer_network.get_output()
 
-            ### TODO: Extract any desired stats from the results ###
+            ### Extract any desired stats from the results ###
             # get and draw the bounding box for person
             frame, p_counts = count_draw(frame, result, args, width, height)
 
-            ### TODO: Calculate and send relevant information on ###
+            ### Calculate and send relevant information on ###
             ### current_count, total_count and duration to the MQTT server ###
             ### Topic "person": keys of "count" and "total" ###
             ### Topic "person/duration": key of "duration" ###
@@ -271,11 +268,11 @@ def infer_on_stream(args, client):
             #Publish to MQTT Server
             client.publish("person", json.dumps({"count": p_counts}))
 
-        ### TODO: Send the frame to the FFMPEG server ###
+        ### Send the frame to the FFMPEG server ###
             sys.stdout.buffer.write(frame)
             sys.stdout.flush()
 
-        ### TODO: Write an output image if `single_image_mode` ###
+        ### Write an output image if `single_image_mode` ###
         if single_image_mode:
             cv2.imwrite('output_image.jpg', frame)
             infer_network.clean()
